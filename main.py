@@ -6,39 +6,32 @@ import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 import os
 from itertools import groupby, islice,  cycle
+import os.path
+from moviepy.editor import VideoFileClip
+from IPython.display import HTML
 
 # %matplotlib qt
 
 
 ### helper functions for visualization and saving results ###
 
-def visualize(filename, a):
-    fig, axes = plt.subplots(2,4,figsize=(24,12),subplot_kw={'xticks':[],'yticks':[]})
-    fig.subplots_adjust(hspace=0.03, wspace=0.05)
-    for p in zip(sum(axes.tolist(),[]), a):
-        p[0].imshow(p[1],cmap='gray')
-    plt.tight_layout()
-    fig.savefig(filename)
-    plt.close()
-    
-visualize("output_images/grid_images/images_grid_test.jpg",
-          (mpimg.imread(f) for f in cycle(glob.glob("test_images/test*.jpg"))))
+def save_image(img, fname):
+    cv2.imwrite(fname ,img)
 
-def plot_all(src, dst, src_title, dst_title):
-        f, (ax1, ax2) = plt.subplots(1, 2, figsize=(24, 9))
-        f.tight_layout()
-        ax1.imshow(src, cmap='gray')
-        ax1.set_title(src_title, fontsize=50)
-        ax2.imshow(dst, cmap='gray')
-        ax2.set_title(dst_title, fontsize=50)
-        plt.subplots_adjust(left=0., right=1, top=0.9, bottom=0.)
-
-
+def save_matrix(M, Minv, name):
+    np.save(name + '_warp_matrix' , M)
+    np.save(name +'_unwarp_matrix' , Minv)
 
 ### Camera Calibration ### 
 #### Compute the camera calibration matrix and distortion coefficients given a set of chessboard images. ####
 
 def get_camera_calibration(img_size):
+    if(os.path.isfile(name + 'calibrateCamera_mtx.npy') & os.path.isfile(name + 'calibrateCamera_dist.npy')):
+        mtx = np.load(name + "calibrateCamera_mtx.npy")
+        dist = np.load(name + "calibrateCamera_dist.npy")
+        print('Loading camera calibration matrix ...')
+        return mtx, dist
+
     objp = np.zeros((6*9,3), np.float32)
     objp[:,:2] = np.mgrid[0:9,0:6].T.reshape(-1,2)
 
@@ -57,37 +50,31 @@ def get_camera_calibration(img_size):
             objpoints.append(objp)
             imgpoints.append(corners)
     ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, img_size,None,None)
+    np.save(name + "calibrateCamera_mtx", mtx)
+    np.save(name + "calibrateCamera_dist", dist)
+    print('Done calculating camera calibration ...')
+
     return mtx, dist
 
 #### Apply a distortion correction to raw images. ####
 
-def undistort(img):
+def get_undistorted_image(img):
     img_size = (img.shape[1], img.shape[0])
     mtx, dist = get_camera_calibration(img_size)
     dst = cv2.undistort(img, mtx, dist, None, mtx)
+    print('Done undistorting the image ...')
     return dst
-
-def apply_distortion_correction():
-    image_names = os.listdir('./test_images')
-    i = 0
-    images = glob.glob('./test_images/*.jpg')
-    
-    for fname in images:
-        img = mpimg.imread(fname)
-        dst = undistort(img)
-        cv2.imwrite('./output_images/undistorted_images/undist_' + image_names[i] ,dst)
-        i = i + 1
-        # plot_all(img, dst, 'Test_image', 'Undistorted Image.')
-
-    visualize("output_images/grid_images/images_grid_undistord.jpg",
-          (mpimg.imread(f) for f in cycle(glob.glob("output_images/undistorted_images/*.jpg"))))
-
 
 ###############################################################################
 
 ### Apply a perspective transform to rectify binary image ("birds-eye view"). ### 
 
-def measure_warp(img):
+def measure_warp(img, name):
+    if(os.path.isfile(name + '_warp_matrix.npy') & os.path.isfile(name + '_unwarp_matrix.npy')):
+        M = np.load(name + '_warp_matrix.npy')
+        Minv = np.load(name + '_unwarp_matrix.npy')
+        print('Loading saved perspective transformation matrix for ' + name)
+        return M, Minv
     top = 0
     bottom = img.shape[0]
     def handler(e):
@@ -112,41 +99,20 @@ def measure_warp(img):
     M = cv2.getPerspectiveTransform((np.asfarray(src, np.float32)), (np.asfarray(dst, np.float32)))
     Minv = cv2.getPerspectiveTransform(np.asfarray(dst, np.float32), np.asfarray(src, np.float32))
     matplotlib.interactive(was_interactive)
+    np.save(name + '_warp_matrix', M)
+    np.save(name + '_unwarp_matrix' , Minv)
     return M, Minv
 
-def save_matrix(M, Minv, name):
-    np.save('warp_matrix_'  + name, M)
-    np.save('unwarp_matrix_'  + name , Minv)
 
-def perspective_transform(img):
+
+def get_warped_image(img, name):
 
     img_size = (img.shape[1], img.shape[0])
-    M, Minv = measure_warp(img)
+    M, Minv = measure_warp(img, name)
     warped = cv2.warpPerspective(img, M, img_size)
     unwarp = cv2.warpPerspective(warped, Minv, img_size)
+    print('Done Perspective Transform ...')
     return warped, unwarp, M, Minv
-
-def apply_perspective_transform():
-    
-    image_names = os.listdir('./test_images')
-    i = 0
-    images = glob.glob('./output_images/undistorted_images/*.jpg')
-    
-    for fname in images:
-        img = mpimg.imread(fname)
-        warped_image, unwarp, M, Minv = perspective_transform(img)
-        name = image_names[i][:len(image_names[i]) - 4]
-        save_matrix(M, Minv, name)
-        cv2.imwrite('./output_images/warped_images/warped_' + image_names[i] ,warped_image)
-        cv2.imwrite('./output_images/unwarp_images/unwarped_' + image_names[i] ,unwarp)
-        i = i + 1
-        plot_all(img, unwarp,'Undistorted Image.', 'Unwarped Grad.')
-        plot_all(img, warped_image,'Undistorted Image.', 'Warped Grad.')
-        
-    visualize("output_images/grid_images/images_grid_warped.jpg", 
-              (mpimg.imread(f) for f in cycle(glob.glob("output_images/warped_images/*.jpg"))))
-    visualize("output_images/grid_images/images_grid_unwarped.jpg", 
-          (mpimg.imread(f) for f in cycle(glob.glob("output_images/unwarp_images/*.jpg"))))
     
 
 ###############################################################################
@@ -156,8 +122,8 @@ def apply_perspective_transform():
 def binary_threshold(img, thresh):
     binary = np.zeros_like(img)
     binary[(img > thresh[0]) & (img <= thresh[1])] = 1
-
     return binary
+
 def abs_sobel_func(img, orient, sobel_kernel = 3):
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     sobel = cv2.Sobel(gray, cv2.CV_64F, orient == 'x', orient == 'y', ksize=sobel_kernel)
@@ -171,20 +137,16 @@ def abs_sobel_thresh(img, orient='x', sobel_kernel=3, thresh=(20,100)):
     return sxbinary
 
 def mag_thresh(img, sobel_kernel=9, mag_thresh=(30, 100)):
-    
     abs_sobelx = abs_sobel_func(img, 'x', sobel_kernel)
     abs_sobely = abs_sobel_func(img, 'y', sobel_kernel)
     abs_sobel = np.sqrt(abs_sobelx**2 + abs_sobely**2)
-    
     scaled_sobel = np.uint8(255*abs_sobel/np.max(abs_sobel))
     mask = binary_threshold(scaled_sobel, mag_thresh)
     return mask
 
 def dir_threshold(img, sobel_kernel=15, thresh=(0.7, 1.3)):
-
     abs_sobelx = abs_sobel_func(img, 'x', sobel_kernel)
     abs_sobely = abs_sobel_func(img, 'y', sobel_kernel)
-    
     dir_gradient = np.arctan2(abs_sobely, abs_sobelx)
     binary_output = binary_threshold(dir_gradient, thresh)
     return binary_output
@@ -201,7 +163,6 @@ def apply_gradian_threshold(image):
     return grad_binary
 
 def apply_color_threshold(img):
-
     r_channel = img[:,:,0]
     thresh = (150, 255)
     r_binary = binary_threshold(r_channel, thresh)
@@ -231,23 +192,9 @@ def get_binary_image(img):
 
     combined_binary = np.zeros_like(gradient_binary)
     combined_binary[(gradient_binary == 1) | (color_binary == 1)] = 1
+    print('Done binary transform ...')
     return combined_binary
-    
-def apply_binary_theshold():
-    image_names = os.listdir('./test_images')
-    i = 0
-    images = glob.glob('./output_images/warped_images/*.jpg')
-    
-    for fname in images:
-        img = mpimg.imread(fname)
-        combined_binary = get_binary_image(img)
         
-        cv2.imwrite('./output_images/binary_images/binary_' + image_names[i] ,combined_binary)
-        i = i + 1
-        plot_all(img, combined_binary,'Warped Image.', 'Thresholded Grad.')
-
-    visualize("output_images/grid_images/images_grid_binary.jpg",
-          (mpimg.imread(f) for f in cycle(glob.glob("output_images/binary_images/*.jpg"))))       
 
 
 ###############################################################################
@@ -327,60 +274,12 @@ def detect_lines_sliding_window(warped_binary):
     right_fitx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]
     out_img[nonzeroy[left_lane_inds], nonzerox[left_lane_inds]] = [255, 0, 0]
     out_img[nonzeroy[right_lane_inds], nonzerox[right_lane_inds]] = [0, 0, 255]
-#     out_img[ploty.astype('int'),left_fitx.astype('int')] = [0, 255, 255]
-#     out_img[ploty.astype('int'),right_fitx.astype('int')] = [0, 255, 255]
-    y_eval = warped_binary.shape[0]
-    # Define conversions in x and y from pixels space to meters
-    ym_per_pix = 30/720 # meters per pixel in y dimension
-    xm_per_pix = 3.7/700 # meters per pixel in x dimension
-    # Fit new polynomials to x,y in world space
-#     left_fit_cr = np.polyfit(lefty*ym_per_pix, leftx*xm_per_pix, 2)
-#     right_fit_cr = np.polyfit(righty*ym_per_pix, rightx*xm_per_pix, 2)
-    # Calculate the new radii of curvature
-#     left_curverad = ((1 + (2*left_fit_cr[0]*y_eval*ym_per_pix + left_fit_cr[1])**2)**1.5) / np.absolute(2*left_fit_cr[0])
-#     right_curverad = ((1 + (2*right_fit_cr[0]*y_eval*ym_per_pix + right_fit_cr[1])**2)**1.5) / np.absolute(2*right_fit_cr[0])
-#     return left_fit, right_fit, np.sqrt(left_fit[1]/len(leftx)), np.sqrt(right_fit[1]/len(rightx)), left_curverad, right_curverad, out_img
-    # return left_fit, right_fit, np.sqrt(left_fit[1]/len(leftx)), np.sqrt(right_fit[1]/len(rightx)),out_img
+
+    print('Done finding lines ...')
     return left_fit, right_fit,out_img
-
-
-
-def polyfit(window_centroids, ypoint):
-    ploty = np.array(ypoint)
-    xp = np.array(window_centroids)
-    polyfit = np.polyfit(ploty, xp, 2)
-    #polyfitx = polyfit[0]*ploty**2 + polyfit[1]*ploty + polyfit[2]
-    return polyfit
-
-def measure_polyfit(window_centroids, ypoint):
-    ploty = np.array(ypoint)
-    xp = np.array(window_centroids)
-    polyfit = np.polyfit(ploty, xp, 2)
-    #polyfitx = polyfit[0]*ploty**2 + polyfit[1]*ploty + polyfit[2]
-    return polyfit
+  
     
-
-def measure_curvature(polyfit, ypoint):
-    ploty = np.linspace(0, 719, num=720)
-    A = polyfit[0]
-    B = polyfit[1]
-    y_eval = np.max(ploty)
-    curvature = (1 + (2 * A * y_eval + B) ** 2) ** 1.5 / (2 * np.absolute(A))
-    return curvature
-
-def measure_curvature_real(polyfit, ypoint):  
-    ym_per_pix = 3./300 # meters per pixel in y dimension
-    xm_per_pix = 3.7/400 # meters per pixel in x dimension
-    
-    left_fit_cr = np.polyfit(ploty_l * ym_per_pix, leftx * xm_per_pix, 2)
-    right_fit_cr = np.polyfit(ploty_r * ym_per_pix, rightx* xm_per_pix , 2)
-    
-    left_curverad = ((1 + (2*left_fit_cr[0]*y_eval_l*ym_per_pix + left_fit_cr[1])**2)**1.5) / np.absolute(2*left_fit_cr[0])
-    right_curverad = ((1 + (2*right_fit_cr[0]*y_eval_r*ym_per_pix + right_fit_cr[1])**2)**1.5) / np.absolute(2*right_fit_cr[0])
-    return left_curverad, right_curverad
-    
-    
-def draw_lane(undistorted, warped_binary,newwarp, left_fit, right_fit, Minv):
+def draw_lane(undistorted, warped_binary,left_fit, right_fit, Minv):
     # Create an image to draw the lines on
     warp_zero = np.zeros_like(warped_binary).astype(np.uint8)
     color_warp = np.dstack((warp_zero, warp_zero, warp_zero))
@@ -436,58 +335,37 @@ def draw_lane(undistorted, warped_binary,newwarp, left_fit, right_fit, Minv):
     cv2.putText(result_lane, "L. Curvature: %.2f km" % (left_curverad/1000), (50,50), cv2.FONT_HERSHEY_DUPLEX, 1, (255,255,255), 2)
     cv2.putText(result_lane, "R. Curvature: %.2f km" % (right_curverad/1000), (50,80), cv2.FONT_HERSHEY_DUPLEX, 1, (255,255,255), 2)
     # Annotate image with position estimate
-#     cv2.putText(result, "C. Position: %.2f m" % ((np.average((l_fitx + r_fitx)/2) - warped_binary.shape[1]//2)*3.7/700), (50,110), cv2.FONT_HERSHEY_DUPLEX, 1, (255,255,255), 2)
+    cv2.putText(result_lane, "C. Position: %.2f m" % ((np.average((left_fitx + right_fitx)/2) - warped_binary.shape[1]//2)*3.7/700), (50,110), cv2.FONT_HERSHEY_DUPLEX, 1, (255,255,255), 2)
     
-    return result_lane, result_line, newwarp, color_warp
-
-def draw_lanes():
-    
-    image_names = os.listdir('./test_images')
-    
-    binary_images = glob.glob('./output_images/binary_images/*.jpg')
-    undistorted_images = glob.glob('./output_images/undistorted_images/*.jpg')
-    unwarped_images = glob.glob('./output_images/unwarp_images/*.jpg')
-    
-    for i in range(len(image_names)):
-        warped_binary = cv2.imread(binary_images[i], cv2.IMREAD_GRAYSCALE)
-        undistorted = cv2.imread(undistorted_images[i])
-        unwarp = cv2.imread(unwarped_images[i])
-
-        l_fit, r_fit, out_img = detect_lines_sliding_window(warped_binary)
-        plot_all(undistorted, out_img,'undistorted.', 'sliding window.')
-
-        name = image_names[i][:len(image_names[i]) - 4]
-        Minv = np.load('unwarp_matrix_' + name + '.npy' )
-        
-        lane_image, line_image, newwarp, color_warp = draw_lane(undistorted, warped_binary,unwarp, l_fit, r_fit, Minv)
-
-        cv2.imwrite('./output_images/lane_images/lane_' + image_names[i] ,lane_image)
-        cv2.imwrite('./output_images/line_images/line_' + image_names[i] ,line_image)
-        cv2.imwrite('./output_images/sliding_window_images/window_' + image_names[i] ,out_img)
-        plot_all(line_image, lane_image,'warped_binary.', 'lane_image.')
-
-	visualize("output_images/grid_images/images_grid_lane.jpg", (mpimg.imread(f) for f in cycle(glob.glob("output_images/lane_images/*.jpg"))))
-	visualize("output_images/grid_images/images_grid_line.jpg",(mpimg.imread(f) for f in cycle(glob.glob("output_images/line_images/*.jpg"))))
-	visualize("output_images/grid_images/images_grid_sliding_window.jpg",(mpimg.imread(f) for f in cycle(glob.glob("output_images/sliding_window_images/*.jpg"))))
+    print('Done drawing lane ...')
+    return result_lane, result_line
 
 
-# Apply a distortion correction to raw images.
+def process_image(test_img, save = False):
+    undistorted_img = get_undistorted_image(test_img)
+    binary_image = get_binary_image(undistorted_img)
+    binary_warped_image, unwarped_image, M, Minv = get_warped_image(binary_image, name)
+    l_fit, r_fit, window_line_image = detect_lines_sliding_window(binary_warped_image)
+    lane_image, line_image = draw_lane(undistorted_img, binary_warped_image, l_fit, r_fit, Minv)
 
+    if(save):
+        save_image(window_line_image, name + '_window_line_image.jpg')
+        save_image(unwarped_image, name + '_unwarped_image.jpg')
+        save_image(binary_warped_image, name + '_binary_warped_image.jpg')
+        save_image(binary_image, name + '_binary_image.jpg')
+        save_image(undistorted_img, name + '_undistorted_img.jpg')
+        save_image(lane_image, name + '_lane_image.jpg')
+        save_image(line_image, name + '_line_image.jpg')
+    return lane_image
 
-# Compute the camera calibration matrix and distortion coefficients given a set of chessboard images.
-# Apply a distortion correction to raw images.
-apply_distortion_correction()
+##### For Single image
+name = './output_images/single_images/test_images/test3'
+test_img = cv2.imread(name + '.jpg')
+process_image(test_img, True)
 
-# Apply a perspective transform to rectify binary image ("birds-eye view").
-apply_perspective_transform()
-
-# Use color transforms, gradients, etc., to create a thresholded binary image.
-apply_binary_theshold() 
-
-# Detect lane pixels and fit to find the lane boundary.
-# Determine the curvature of the lane and vehicle position with respect to center.
-# Warp the detected lane boundaries back onto the original image.
-# Output visual display of the lane boundaries and numerical estimation of lane curvature and vehicle position.
-draw_lanes()
-
-
+##### For video
+# name = 'harder_challenge_video'
+# video_output = name+'_output.mp4'
+# clip1 = VideoFileClip('project_video.mp4')
+# white_clip = clip1.fl_image(process_image) 
+# white_clip.write_videofile(video_output, audio=False)
