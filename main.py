@@ -7,8 +7,8 @@ import matplotlib.image as mpimg
 import os
 from itertools import groupby, islice,  cycle
 import os.path
-from moviepy.editor import VideoFileClip
-from IPython.display import HTML
+# from moviepy.editor import VideoFileClip
+# from IPython.display import HTML
 
 # %matplotlib qt
 
@@ -360,13 +360,14 @@ def process_image(test_img, save = False):
     lane_image, line_image = draw_lane(undistorted_img, binary_warped_image, l_fit, r_fit, Minv)
 
     if(save):
-        save_image(window_line_image, name + '_window_image.jpg')
+        # save_image(window_line_image, name + '_window_image.jpg')
         # save_image(unwarped_image, name + '_unwarped_image.jpg')
         # save_image(binary_warped_image, name + '_binary_warped_image.jpg')
         # save_image(binary_image, name + '_binary_image.jpg')
-        save_image(undistorted_img, name + '_undistorted_img.jpg')
-        save_image(lane_image, name + '_lane_image.jpg')
-        save_image(line_image, name + '_line_image.jpg')
+        # save_image(undistorted_img, name + '_undistorted_img.jpg')
+        # save_image(lane_image, name + '_lane_image.jpg')
+        # save_image(line_image, name + '_line_image.jpg')
+        cv2.imwrite(name + '_binary_image.jpg' ,binary_image.astype('uint8') * 255)
     return lane_image
 
 ##### For images
@@ -379,17 +380,17 @@ for n in names:
     process_image(test_img, True)
 
 ##### For video
-name = 'harder_challenge_video'
-video_output = name+'_output.mp4'
-clip1 = VideoFileClip('project_video.mp4')
-white_clip = clip1.fl_image(process_image) 
-white_clip.write_videofile(video_output, audio=False)
+# name = 'harder_challenge_video'
+# video_output = name+'_output.mp4'
+# clip1 = VideoFileClip('project_video.mp4')
+# white_clip = clip1.fl_image(process_image) 
+# white_clip.write_videofile(video_output, audio=False)
 
 
-# outnames = ['_line_image.jpg', '_undistorted_img.jpg', '_lane_image.jpg','_window_image.jpg', '.jpg']
-# for outname in outnames:
-#     listname = []
-#     for n in names:
-#         listname.append(address+n+outname)
-#     visualize("output_images/grid" + outname,
-#                   (mpimg.imread(f) for f in listname))
+outnames = ['_unwarped_image.jpg', '_binary_warped_image.jpg', '_binary_image.jpg']
+for outname in outnames:
+    listname = []
+    for n in names:
+        listname.append(address+n+outname)
+    visualize("output_images/grid" + outname,
+                  (mpimg.imread(f) for f in listname))
