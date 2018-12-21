@@ -22,6 +22,17 @@ def save_matrix(M, Minv, name):
     np.save(name + '_warp_matrix' , M)
     np.save(name +'_unwarp_matrix' , Minv)
 
+
+def visualize(filename, a):
+    fig, axes = plt.subplots(2,4,figsize=(24,12),subplot_kw={'xticks':[],'yticks':[]})
+    fig.subplots_adjust(hspace=0.03, wspace=0.05)
+    for p in zip(sum(axes.tolist(),[]), a):
+        p[0].imshow(p[1],cmap='gray')
+    plt.tight_layout()
+    fig.savefig(filename)
+    plt.close()
+    
+
 ### Camera Calibration ### 
 #### Compute the camera calibration matrix and distortion coefficients given a set of chessboard images. ####
 
@@ -349,23 +360,36 @@ def process_image(test_img, save = False):
     lane_image, line_image = draw_lane(undistorted_img, binary_warped_image, l_fit, r_fit, Minv)
 
     if(save):
-        save_image(window_line_image, name + '_window_line_image.jpg')
-        save_image(unwarped_image, name + '_unwarped_image.jpg')
-        save_image(binary_warped_image, name + '_binary_warped_image.jpg')
-        save_image(binary_image, name + '_binary_image.jpg')
+        save_image(window_line_image, name + '_window_image.jpg')
+        # save_image(unwarped_image, name + '_unwarped_image.jpg')
+        # save_image(binary_warped_image, name + '_binary_warped_image.jpg')
+        # save_image(binary_image, name + '_binary_image.jpg')
         save_image(undistorted_img, name + '_undistorted_img.jpg')
         save_image(lane_image, name + '_lane_image.jpg')
         save_image(line_image, name + '_line_image.jpg')
     return lane_image
 
-##### For Single image
-name = './output_images/single_images/test_images/test3'
-test_img = cv2.imread(name + '.jpg')
-process_image(test_img, True)
+##### For images
+address = './output_images/'
+names = ['test1', 'test2', 'test3', 'test4', 'test5', 'test6', 'straight_lines1', 'straight_lines2']
+
+for n in names:
+    name = address+n
+    test_img = cv2.imread(name + '.jpg')
+    process_image(test_img, True)
 
 ##### For video
-# name = 'harder_challenge_video'
-# video_output = name+'_output.mp4'
-# clip1 = VideoFileClip('project_video.mp4')
-# white_clip = clip1.fl_image(process_image) 
-# white_clip.write_videofile(video_output, audio=False)
+name = 'harder_challenge_video'
+video_output = name+'_output.mp4'
+clip1 = VideoFileClip('project_video.mp4')
+white_clip = clip1.fl_image(process_image) 
+white_clip.write_videofile(video_output, audio=False)
+
+
+# outnames = ['_line_image.jpg', '_undistorted_img.jpg', '_lane_image.jpg','_window_image.jpg', '.jpg']
+# for outname in outnames:
+#     listname = []
+#     for n in names:
+#         listname.append(address+n+outname)
+#     visualize("output_images/grid" + outname,
+#                   (mpimg.imread(f) for f in listname))
